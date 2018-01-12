@@ -5,16 +5,15 @@ const logger = require('koa-logger');
 const conditional = require('koa-conditional-get');
 const etag = require('koa-etag');
 const cors = require('@koa/cors');
-const { graphqlKoa, graphiqlKoa } = require('apollo-server-koa');
-
-const schema = require('./src/schema/index');
-const connectMongo = require('./src/mongo-connector');
-const { authenticate } = require('./src/authentication');
-const buildDataLoaders = require('./src/dataloaders');
-const formatError = require('./src/fomatError');
-const { execute, subscribe } = require('graphql');
 const { createServer } = require('http');
+const { graphqlKoa, graphiqlKoa } = require('apollo-server-koa');
+const { execute, subscribe } = require('graphql');
 const { SubscriptionServer } = require('subscriptions-transport-ws');
+
+const schema = require('./src/schema');
+const connectMongo = require('./src/connector/mongo-connector');
+const { User, Link, Vote } = require('./src/models');
+const formatError = require('./src/helper/fomatError');
 
 const start = async () => {
   const mongo = await connectMongo();
@@ -31,14 +30,17 @@ const start = async () => {
   router.post(
     '/graphql',
     graphqlKoa(async (req, res) => {
-      const user = await authenticate(req, mongo.Users);
+      const { authorization } = req.headers;
+      const user = new User(mongo);
+      const currentUser = await user.authenticate(authorization);
       return {
         schema,
         formatError,
         context: {
-          mongo,
           user,
-          dataLoaders: buildDataLoaders(mongo)
+          link: new Link(mongo),
+          vote: new Vote(mongo),
+          currentUser
         }
       };
     })
